@@ -112,6 +112,18 @@ MAX_QUERY_LENGTH = 256
 MAX_LIMIT = 20
 ALLOWED_CHARS = re.compile(r'^[\w\s\-\?\.,:;!"\'\(\)\[\]{}@#%&/\\=+*<>|~`$^]+$')
 
+# --- SQL Injection Pattern Check ---
+SQLI_PATTERNS = [
+    r";", r"--", r"drop\s+table", r"union\s+select", r"insert\s+into", r"delete\s+from", r"update\s+", r"select\s+.*from", r"or\s+1=1", r"admin'--", r"'\s+or\s+'1'='1"
+]
+
+def contains_sqli_pattern(query: str) -> bool:
+    q = query.lower()
+    for pattern in SQLI_PATTERNS:
+        if re.search(pattern, q):
+            return True
+    return False
+
 # --- Input Sanitization ---
 def sanitize_user_input(query: str) -> str:
     # Remove common prompt injection patterns
@@ -199,6 +211,8 @@ def hybrid_search(query: str, limit: int = 5, include_code: bool = True):
         raise HTTPException(status_code=400, detail=f"Query too long (>{MAX_QUERY_LENGTH} chars).")
     if not ALLOWED_CHARS.match(query):
         raise HTTPException(status_code=400, detail="Query contains disallowed characters.")
+    if contains_sqli_pattern(query):
+        raise HTTPException(status_code=400, detail="Query contains disallowed SQL injection pattern.")
     if limit < 1 or limit > MAX_LIMIT:
         raise HTTPException(status_code=400, detail=f"Limit must be between 1 and {MAX_LIMIT}.")
     # Defensive input sanitization
