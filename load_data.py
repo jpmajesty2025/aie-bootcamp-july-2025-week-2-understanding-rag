@@ -91,15 +91,27 @@ def chunk_markdown_by_header(text: str) -> List[str]:
 encoding = tiktoken.get_encoding("cl100k_base")
 
 def truncate_chunk(chunk: str, max_tokens: int = 2000) -> str:
-    tokens = encoding.encode(chunk)
+    tokens = encoding.encode(chunk, disallowed_special=())
     if len(tokens) > max_tokens:
         tokens = tokens[:max_tokens]
         return encoding.decode(tokens)
     return chunk
 
+# Set up a logger for clamping info
+clamp_logger = logging.getLogger("sparse_clamp")
+clamp_handler = logging.FileHandler("sparse_clamp.log")
+clamp_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+clamp_logger.addHandler(clamp_handler)
+clamp_logger.setLevel(logging.INFO)
+
 def dense_to_sparse(vec, threshold=1e-6):
-    """Convert a dense vector to a scipy.sparse.csr_matrix with thresholding."""
-    sparse_vec = [v if abs(v) > threshold else 0.0 for v in vec]
+    """Convert a dense vector to a scipy.sparse.csr_matrix with thresholding and non-negativity. Log clamping stats."""
+    total = len(vec)
+    clamped = sum(1 for v in vec if v < 0)
+    sparse_vec = [v if v > threshold else 0.0 for v in vec]  # Only keep positive values above threshold
+    # Log the fraction of values clamped
+    if total > 0:
+        clamp_logger.info(f"Clamped {clamped}/{total} ({clamped/total:.2%}) negative values to zero in sparse vector.")
     return csr_matrix([sparse_vec])
 
 # --- Embedding Functions ---
